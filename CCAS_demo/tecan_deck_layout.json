@@ -1,0 +1,47 @@
+{
+    "resources": [
+        {
+            "name": "tip_rack",
+            "type": "TipRack",
+            "location": "A1",
+            "wells": [
+                "A1",
+                "A2",
+                "A3",
+                "A4",
+                "A5",
+                "A6",
+                "A7",
+                "A8"
+            ]
+        },
+        {
+            "name": "trough_1",
+            "type": "Trough",
+            "location": "A1",
+            "wells": [
+                "A1",
+                "A2",
+                "A3"
+            ]
+        },
+        {
+            "name": "trough_2",
+            "type": "Trough",
+            "location": "A2",
+            "wells": [
+                "A1",
+                "A2",
+                "A3",
+                "A4"
+            ]
+        },
+        {
+            "name": "plate",
+            "type": "Plate",
+            "location": "B2",
+            "rows": 8,
+            "cols": 12
+        }
+    ]
+}

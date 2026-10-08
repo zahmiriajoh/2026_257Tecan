@@ -9,6 +9,9 @@ This repository contains starter files for a simple Tecan/PyLabRobot test workfl
 - `CCAS_demo/deck_layout.md` - placement assumptions for source and destination decks
 - `CCAS_demo/demo_transfer.py` - generalized transfer template
 - `CCAS_demo/probe_locations.py` - deck probe script for testing A1/A2 locations and shared-tip movement
+- `CCAS_demo/spps_toy_job.py` - combinatorial sequence planner for the toy SPPS run
+- `CCAS_demo/tecan_spps_run.py` - Tecan-ready PyLabRobot script using the EVO backend
+- `CCAS_demo/tecan_deck_layout.json` - deck map template for the actual robot
 - `CCAS_demo/requirements_demo.txt` - PyLabRobot install hint
 
 ## Current toy workflow assumptions
@@ -77,6 +80,21 @@ python CCAS_demo/spps_toy_job.py
 ```
 
 This script generates the plate-level sequence plan for all 4-AA permutations and then the 2-AA permutations, and prints the representative steps for each well.
+
+## Run the actual Tecan-ready job
+From the repository root, after confirming the deck JSON matches the real instrument:
+
+```bash
+python CCAS_demo/tecan_spps_run.py
+```
+
+This is the version intended to be run on the Tecan with the installed PyLabRobot/EVO stack. It uses the shared-tip strategy across 8 reusable tips and follows the reagent ordering:
+
+```text
+Fmoc-AA -> DMF -> DCE -> piperidine
+```
+
+for each amino acid in the sequence assigned to a well.
 
 ## Environment setup
 Install PyLabRobot in the environment used by the robot controller:
