@@ -2,10 +2,12 @@
 """Tecan-ready PyLabRobot script for the toy SPPS demonstration job.
 
 This version is written to match the real PyLabRobot/Tecan pattern:
-- A1: trough with reagent wells for DMF, DCE, and piperidine
-- A2: trough with four amino acid wells (AA1..AA4)
-- B2: 96-well flat-bottom destination plate
-- 8 reusable LiHa tips via shared-tip strategy
+- trough_1 (grid 3, site 1): compartments for piperidine, DCE, DMF (and DMSO, unused)
+- trough_2 (grid 3, site 2): four amino acid compartments (AA1..AA4)
+- plate (grid 17, site 2): 96-well flat-bottom destination plate
+- 8 fixed (steel) LiHa tips, one dedicated to each liquid (see LIQUID_CHANNELS)
+
+Deck positions are defined in ``ccas_deck.py`` (see ``ccas_deck.png``).
 
 The script encodes the requested logic:
 1. All ordered 4-AA combinations across the plate
@@ -15,26 +17,41 @@ The script encodes the requested logic:
 4. Repeat the sequence set as needed to fill all 96 wells
 
 This script is intended for execution on a machine where PyLabRobot and the
-Tecan EVO driver stack are installed. Update the deck JSON file to match your
-actual deck coordinates before running on hardware.
+Tecan EVO driver stack are installed. Confirm the grid/site constants in
+``ccas_deck.py`` match the actual deck before running on hardware.
 """
 
 from __future__ import annotations
 
 import asyncio
 from itertools import permutations
-from pathlib import Path
-
 try:
     from pylabrobot.liquid_handling import LiquidHandler
     from pylabrobot.liquid_handling.backends import EVOBackend
+    from pylabrobot.resources.tecan.tip_creators import standard_fixed_tip
+    from ccas_deck import AA_SOURCE_WELLS, REAGENT_WELLS, build_deck
 except ImportError:  # pragma: no cover - enables syntax checking in minimal environments
     LiquidHandler = None
     EVOBackend = None
 
 AA_ORDER = ["AA1", "AA2", "AA3", "AA4"]
-AA_SOURCE_WELLS = {"AA1": "A1", "AA2": "A2", "AA3": "A3", "AA4": "A4"}
-REAGENT_WELLS = {"DMF": "A1", "DCE": "A2", "PIPERIDINE": "A3"}
+VOLUME_UL = 25.0
+
+# Fixed tips are never changed, so each liquid gets its own channel (0 = rear-most tip) to avoid
+# carrying one reagent into another. PLR 0.2.1 has no fixed-tip wash command, so this replaces
+# washing between reagents within a run; wash the tips in EVOware before and after a run.
+# trough_1 is at the rear site, so it uses the rear channels: when channel k is over a well,
+# channel 0 sits k * 9 mm further back and must stay inside the LiHa's Y range.
+# Channel 7 is spare.
+LIQUID_CHANNELS = {
+    "PIPERIDINE": 0,
+    "DCE": 1,
+    "DMF": 2,
+    "AA1": 3,
+    "AA2": 4,
+    "AA3": 5,
+    "AA4": 6,
+}
 
 
 def build_unique_sequence_set() -> list[list[str]]:
@@ -63,13 +80,18 @@ def build_plate_wells() -> list[str]:
     return [f"{row}{col}" for row in rows for col in cols]
 
 
-async def pick_shared_tip(lih: LiquidHandler, tip_index: int) -> str:
-    """Pick a reusable tip from the 8-position shared-tip rack."""
-    tip_rack = lih.deck.get_resource("tip_rack")
-    tip_positions = [f"A{i}" for i in range(1, 9)]
-    tip_pos = tip_positions[tip_index % len(tip_positions)]
-    await lih.pick_up_tips(tip_rack[tip_pos])
-    return tip_pos
+def mount_fixed_tips(lih: LiquidHandler) -> None:
+    """Tell PLR every channel permanently carries a fixed tip (no pick-up or drop moves)."""
+    lih.update_head_state(
+        {ch: standard_fixed_tip(name=f"fixed_tip_{ch + 1}") for ch in range(lih.backend.num_channels)}
+    )
+
+
+async def transfer(lih: LiquidHandler, liquid: str, source, destination) -> None:
+    """Aspirate from source and dispense to destination on the liquid's dedicated channel."""
+    channel = LIQUID_CHANNELS[liquid]
+    await lih.aspirate(source, vols=[VOLUME_UL], use_channels=[channel])
+    await lih.dispense(destination, vols=[VOLUME_UL], use_channels=[channel])
 
 
 async def run_well_sequence(lih: LiquidHandler, well_name: str, amino_acid_order: list[str]) -> None:
@@ -77,25 +99,12 @@ async def run_well_sequence(lih: LiquidHandler, well_name: str, amino_acid_order
     plate = lih.deck.get_resource("plate")
     trough_1 = lih.deck.get_resource("trough_1")
     trough_2 = lih.deck.get_resource("trough_2")
-    aspirate_dispense_volume = 25.0
 
-    for aa_index, aa in enumerate(amino_acid_order):
-        tip_name = await pick_shared_tip(lih, aa_index)
-        try:
-            await lih.aspirate(trough_2[AA_SOURCE_WELLS[aa]], vols=aspirate_dispense_volume)
-            await lih.dispense(plate[well_name], vols=aspirate_dispense_volume)
-
-            await lih.aspirate(trough_1[REAGENT_WELLS["DMF"]], vols=aspirate_dispense_volume)
-            await lih.dispense(plate[well_name], vols=aspirate_dispense_volume)
-
-            await lih.aspirate(trough_1[REAGENT_WELLS["DCE"]], vols=aspirate_dispense_volume)
-            await lih.dispense(plate[well_name], vols=aspirate_dispense_volume)
-
-            await lih.aspirate(trough_1[REAGENT_WELLS["PIPERIDINE"]], vols=aspirate_dispense_volume)
-            await lih.dispense(plate[well_name], vols=aspirate_dispense_volume)
-        finally:
-            await lih.return_tips()
-            print(f"Well {well_name}: completed {aa} using reusable tip {tip_name}")
+    for aa in amino_acid_order:
+        await transfer(lih, aa, trough_2[AA_SOURCE_WELLS[aa]], plate[well_name])
+        for reagent in ("DMF", "DCE", "PIPERIDINE"):
+            await transfer(lih, reagent, trough_1[REAGENT_WELLS[reagent]], plate[well_name])
+        print(f"Well {well_name}: completed {aa}")
 
 
 async def run_plate(lih: LiquidHandler) -> None:
@@ -110,21 +119,15 @@ async def run_plate(lih: LiquidHandler) -> None:
 
 
 async def main() -> None:
-    deck_path = Path(__file__).with_name("tecan_deck_layout.json")
-    if not deck_path.exists():
-        raise FileNotFoundError(
-            "Deck layout file not found: "
-            f"{deck_path}. Update the file to match the real Tecan deck before running."
-        )
-
-    deck = Deck.load_from_json_file(str(deck_path))
-    lih = LiquidHandler(backend=EVOBackend(), deck=deck)
+    deck = build_deck()
+    lih = LiquidHandler(backend=EVOBackend(diti_count=0), deck=deck)  # 0 DiTi channels: all fixed
     await lih.setup()
+    mount_fixed_tips(lih)
 
     try:
         await run_plate(lih)
     finally:
-        await lih.teardown()
+        await lih.stop()
 
 
 if __name__ == "__main__":

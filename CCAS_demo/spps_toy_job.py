@@ -2,8 +2,8 @@
 """Toy SPPS test job for the Tecan LiHa.
 
 This script encodes the actual job described by the user:
-- 4 Fmoc-protected amino acids are stored in Trough 2 (A2)
-- Trough 1 (A1) contains DMF, DCE, and the deprotection agent (piperidine)
+- 4 Fmoc-protected amino acids are stored in trough_2 (grid 3, site 2; see ccas_deck.py)
+- trough_1 (grid 3, site 1) contains DMF, DCE, and the deprotection agent (piperidine)
 - For each well, generate all ordered permutations of the 4 amino acids
 - Then, fill the remaining wells with all ordered pairs of the 4 amino acids
 - For each amino acid in the sequence:
@@ -25,9 +25,11 @@ from typing import Iterable, List, Sequence
 
 
 AA_NAMES = ["AA1", "AA2", "AA3", "AA4"]
-TROUGH_1 = "Trough_1"  # DMF, DCE, deprotection agent
-TROUGH_2 = "Trough_2"  # 4 Fmoc-protected amino acid solutions
-DESTINATION_PLATE = "Destination_96"
+# Names match the resources in ccas_deck.build_deck(), so plans can be resolved with
+# deck.get_resource(step["source"]).
+TROUGH_1 = "trough_1"  # grid 3, site 1: DMF, DCE, deprotection agent
+TROUGH_2 = "trough_2"  # grid 3, site 2: 4 Fmoc-protected amino acid solutions
+DESTINATION_PLATE = "plate"  # grid 17, site 2: 96-well destination
 
 
 def generate_amino_acid_sequences() -> List[List[str]]:
