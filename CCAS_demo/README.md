@@ -106,11 +106,24 @@ Fmoc-AA -> DMF -> DCE -> piperidine
 for each amino acid in the sequence assigned to a well.
 
 ## Environment setup
-Install PyLabRobot in the environment used by the robot controller:
+Install PyLabRobot and its optional USB dependencies in the environment used by the robot controller:
 
 ```bash
-pip install -r CCAS_demo/requirements_demo.txt
+python -m pip install -r CCAS_demo/requirements_demo.txt
 ```
+
+If PyLabRobot is already installed, install the USB extra into the active environment with:
+
+```bash
+python -m pip install "pylabrobot[usb]==0.2.1"
+```
+
+The USB extra is required for the EVO backend to open the robot connection. On Windows, the
+Tecan's USB interface may also require a compatible libusb driver; resolve that separately if a
+subsequent run reports that no USB device was found.
+
+The demo dependency is pinned to PyLabRobot 0.2.1 to match the repository's `requirements.txt`.
+Avoid mixing a different PyLabRobot version into the robot-control environment while debugging.
 
 ## Notes
 - These scripts are intentionally simple and should be treated as demonstration/test starting points.
